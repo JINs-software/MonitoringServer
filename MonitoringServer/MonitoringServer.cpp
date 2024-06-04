@@ -52,7 +52,7 @@ void MonitoringServer::Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverN
 	{
 	case dfSERVER_LOGIN_SERVER:
 	{
-		if (m_LoginServerSession != 0) {
+		if (m_LoginServerSession == -1) {
 			m_LoginServerSession = sessionID;
 		}
 		else {
@@ -63,7 +63,7 @@ void MonitoringServer::Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverN
 		break;
 	case dfSERVER_ECHO_GAME_SERVER:
 	{
-		if (m_EchoGameServerSession != 0) {
+		if (m_EchoGameServerSession == -1) {
 			m_EchoGameServerSession = sessionID;
 		}
 		else {
@@ -74,7 +74,7 @@ void MonitoringServer::Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverN
 		break;
 	case dfSERVER_CHAT_SERVER:
 	{
-		if (m_ChatServerSession != 0) {
+		if (m_ChatServerSession == -1) {
 			m_ChatServerSession = sessionID;
 		}
 		else {

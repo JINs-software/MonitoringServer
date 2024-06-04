@@ -38,7 +38,7 @@ public:
 			tlsMemPoolDefaultUnitCnt, tlsMemPoolDefaultCapacity,
 			sessionSendBuffSize, sessionRecvBuffSize
 		), 
-		m_LoginServerSession(0), m_EchoGameServerSession(0), m_ChatServerSession(0),
+		m_LoginServerSession(-1), m_EchoGameServerSession(-1), m_ChatServerSession(-1),
 		m_ExitThread(false)
 	{
 		InitializeSRWLock(&m_MontClientSessionsSrwLock);
@@ -118,15 +118,15 @@ public:
 		ReleaseSRWLockExclusive(&m_MontClientSessionsSrwLock);
 
 		if (m_LoginServerSession == sessionID) {
-			m_LoginServerSession = 0;
+			m_LoginServerSession = -1;
 			std::cout << "[OnClientLeave] 로그인 서버 연결 종료" << std::endl;
 		}
 		else if (m_EchoGameServerSession == sessionID) {
-			m_EchoGameServerSession = 0;
+			m_EchoGameServerSession = -1;
 			std::cout << "[OnClientLeave] 에코 게임 서버 연결 종료" << std::endl;
 		}
 		else if (m_ChatServerSession == sessionID) {
-			m_ChatServerSession = 0;
+			m_ChatServerSession = -1;
 			std::cout << "[OnClientLeave] 채팅 서버 연결 종료" << std::endl;
 		}
 
