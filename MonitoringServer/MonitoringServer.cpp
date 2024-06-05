@@ -170,7 +170,7 @@ UINT __stdcall MonitoringServer::PerformanceCountFunc(void* arg)
 		montserver->m_MontDataMap[dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL].dataValue = montserver->m_PerfCounter->ProcessorTotal();
 		montserver->m_MontDataMap[dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL].timeStamp = now;
 		montserver->m_MontDataMap[dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY].dataValue = montserver->m_PerfCounter->GetPerfCounter(MONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY);
-		montserver->m_MontDataMap[dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY].dataValue /= 1'000'000.0;	// 논-페이지 풀 MBytes
+		montserver->m_MontDataMap[dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY].dataValue /= 1'000'000;	// 논-페이지 풀 MBytes
 		montserver->m_MontDataMap[dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY].timeStamp = now;
 		montserver->m_MontDataMap[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV].dataValue = 0;
 		montserver->m_MontDataMap[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV].timeStamp = now;
