@@ -2,7 +2,7 @@
 #include <conio.h>
 
 int main() {
-	MonitoringServer montserver("127.0.0.1", 10001, 0, 2, 10);
+	MonitoringServer montserver(NULL, 12121, 0, 1, 10);
 
 	montserver.Start();
 

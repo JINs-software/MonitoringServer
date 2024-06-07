@@ -137,7 +137,7 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 		else if (dataType >= dfMONITOR_DATA_TYPE_GAME_SERVER_RUN && dataType <= dfMONITOR_DATA_TYPE_GAME_PACKET_POOL) {
 			body->ServerNo = dfSERVER_ECHO_GAME_SERVER;
 		}
-		else if (dataType >= dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN && dataType <= dfMONITOR_DATA_TYPE_CHAT_UPDATEMSG_POOL) {
+		else if (dataType >= dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN && dataType <= dfMONITOR_DATA_TYPE_CHAT_UPDATE_WORKER_CPU) {
 			body->ServerNo = dfSERVER_CHAT_SERVER;
 		}
 		else if (dataType >= dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL && dataType <= dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY) {
