@@ -1,7 +1,8 @@
 #pragma once
 #include "CLanServer.h"
-#include "MontServerConfig.h"
 #include "PerformanceCounter.h"
+#include "MontServerConfig.h"
+#include "MonitorProtocol.h"
 
 using SessionID = UINT64;
 
@@ -12,8 +13,8 @@ private:
 		int dataValue = 0;
 		int timeStamp = 0;
 	};
-	//stMontData m_MontDataArr[dfMONITOR_DATA_TYPE_MAX_NUM];
-	std::map<BYTE, stMontData> m_MontDataMap;
+	//std::map<BYTE, stMontData> m_MontDataMap;
+	std::vector<stMontData>		m_MontDataVec;
 
 	// 모니터링 대상 서버
 	SessionID				m_LoginServerSession;
@@ -43,42 +44,44 @@ public:
 	{
 		InitializeSRWLock(&m_MontClientSessionsSrwLock);
 
-		m_MontDataMap.insert({1, { 0 }});
-		m_MontDataMap.insert({2, { 0 }});
-		m_MontDataMap.insert({3, { 0 }});
-		m_MontDataMap.insert({4, { 0 }});
-		m_MontDataMap.insert({5, { 0 }});
-		m_MontDataMap.insert({6, { 0 }});
-									
-		m_MontDataMap.insert({10, { 0 }});
-		m_MontDataMap.insert({11, { 0 }});
-		m_MontDataMap.insert({12, { 0 }});
-		m_MontDataMap.insert({13, { 0 }});
-		m_MontDataMap.insert({14, { 0 }});
-		m_MontDataMap.insert({15, { 0 }});
-		m_MontDataMap.insert({16, { 0 }});
-		m_MontDataMap.insert({17, { 0 }});
-		m_MontDataMap.insert({18, { 0 }});
-		m_MontDataMap.insert({19, { 0 }});
-		m_MontDataMap.insert({20, { 0 }});
-		m_MontDataMap.insert({21, { 0 }});
-		m_MontDataMap.insert({22, { 0 }});
-		m_MontDataMap.insert({23, { 0 }});
-									
-		m_MontDataMap.insert({30, { 0 }});
-		m_MontDataMap.insert({31, { 0 }});
-		m_MontDataMap.insert({32, { 0 }});
-		m_MontDataMap.insert({33, { 0 }});
-		m_MontDataMap.insert({34, { 0 }});
-		m_MontDataMap.insert({35, { 0 }});
-		m_MontDataMap.insert({36, { 0 }});
-		m_MontDataMap.insert({37, { 0 }});
-									
-		m_MontDataMap.insert({40, { 0 }});
-		m_MontDataMap.insert({41, { 0 }});
-		m_MontDataMap.insert({42, { 0 }});
-		m_MontDataMap.insert({43, { 0 }});
-		m_MontDataMap.insert({44, { 0 }});
+		//m_MontDataMap.insert({1, { 0 }});
+		//m_MontDataMap.insert({2, { 0 }});
+		//m_MontDataMap.insert({3, { 0 }});
+		//m_MontDataMap.insert({4, { 0 }});
+		//m_MontDataMap.insert({5, { 0 }});
+		//m_MontDataMap.insert({6, { 0 }});
+		//							
+		//m_MontDataMap.insert({10, { 0 }});
+		//m_MontDataMap.insert({11, { 0 }});
+		//m_MontDataMap.insert({12, { 0 }});
+		//m_MontDataMap.insert({13, { 0 }});
+		//m_MontDataMap.insert({14, { 0 }});
+		//m_MontDataMap.insert({15, { 0 }});
+		//m_MontDataMap.insert({16, { 0 }});
+		//m_MontDataMap.insert({17, { 0 }});
+		//m_MontDataMap.insert({18, { 0 }});
+		//m_MontDataMap.insert({19, { 0 }});
+		//m_MontDataMap.insert({20, { 0 }});
+		//m_MontDataMap.insert({21, { 0 }});
+		//m_MontDataMap.insert({22, { 0 }});
+		//m_MontDataMap.insert({23, { 0 }});
+		//							
+		//m_MontDataMap.insert({30, { 0 }});
+		//m_MontDataMap.insert({31, { 0 }});
+		//m_MontDataMap.insert({32, { 0 }});
+		//m_MontDataMap.insert({33, { 0 }});
+		//m_MontDataMap.insert({34, { 0 }});
+		//m_MontDataMap.insert({35, { 0 }});
+		//m_MontDataMap.insert({36, { 0 }});
+		//m_MontDataMap.insert({37, { 0 }});
+		//							
+		//m_MontDataMap.insert({40, { 0 }});
+		//m_MontDataMap.insert({41, { 0 }});
+		//m_MontDataMap.insert({42, { 0 }});
+		//m_MontDataMap.insert({43, { 0 }});
+		//m_MontDataMap.insert({44, { 0 }});
+
+		m_MontDataVec.resize(dfMONITOR_DATA_TYPE_MAX_NUM, {0});
 	}
 
 	bool Start() {
@@ -88,10 +91,10 @@ public:
 
 		m_PerfCounter = new PerformanceCounter();
 		//m_PerfCounter->SetCounter(MONITOR_DATA_TYPE_MONITOR_CPU_TOTAL, NULL);
-		m_PerfCounter->SetCounter(MONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY, dfQUERY_MEMORY_NON_PAGED);
+		m_PerfCounter->SetCounter(dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY, dfQUERY_MEMORY_NON_PAGED);
 		//m_PerfCounter->SetCounter(MONITOR_DATA_TYPE_MONITOR_NETWORK_RECV, NULL);
 		//m_PerfCounter->SetCounter(MONITOR_DATA_TYPE_MONITOR_NETWORK_SEND, NULL);
-		m_PerfCounter->SetCounter(MONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY, dfQUERY_MEMORY_AVAILABLE);
+		m_PerfCounter->SetCounter(dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY, dfQUERY_MEMORY_AVAILABLE);
 
 		m_PerfCounter->SetCpuUsageCounter();
 		
