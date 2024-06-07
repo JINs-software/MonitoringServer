@@ -14,6 +14,8 @@ int main() {
 				break;
 			}
 		}
+
+		Sleep(5000);
 	}
 
 	montserver.Stop();
