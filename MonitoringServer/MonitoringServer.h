@@ -20,8 +20,12 @@ private:
 	SessionID				m_LoginServerSession;
 	SessionID				m_EchoGameServerSession;
 	SessionID				m_ChatServerSession;
-	std::set<SessionID>		m_MontClientSessions;
-	SRWLOCK					m_MontClientSessionsSrwLock;
+	//std::set<SessionID>		m_MontClientSessions;
+	//SRWLOCK					m_MontClientSessionsSrwLock;
+
+	SessionID				m_MontClientSessions[dfMAX_NUM_OF_MONT_CLIENT_TOOL];
+	std::queue<BYTE>		m_EmptyIdxQueue;
+	std::mutex				m_EmptyIdxQueueMtx;
 
 	HANDLE					m_MontThread;
 	bool					m_ExitThread;
@@ -29,57 +33,33 @@ private:
 	PerformanceCounter*		m_PerfCounter;
 
 public:
+	//CLanServer(const char* serverIP, uint16 serverPort,
+	//	DWORD numOfIocpConcurrentThrd, uint16 numOfWorkerThreads, uint16 maxOfConnections,
+	//	size_t tlsMemPoolDefaultUnitCnt = 0, size_t tlsMemPoolDefaultUnitCapacity = 0,
+	//	bool tlsMemPoolReferenceFlag = false, bool tlsMemPoolPlacementNewFlag = false,
+	//	UINT serialBufferSize = DEFAULT_SERIAL_BUFFER_SIZE,
+	//	uint32 sessionRecvBuffSize = SESSION_RECV_BUFFER_DEFAULT_SIZE,
+	//	bool beNagle = true, bool zeroCopySend = false
+	//);
 	MonitoringServer(const char* serverIP, uint16 serverPort,
 		DWORD numOfIocpConcurrentThrd, uint16 numOfWorkerThreads, uint16 maxOfConnections,
 		size_t tlsMemPoolDefaultUnitCnt = MONT_TLS_MEM_POOL_DEFAULT_UNIT_CNT, size_t tlsMemPoolDefaultCapacity = MONT_TLS_MEM_POOL_DEFAULT_UNIT_CAPACITY,
-		uint32 sessionSendBuffSize = MONT_SERV_SESSION_SEND_BUFF_SIZE, uint32 sessionRecvBuffSize = MONT_SERV_SESSION_RECV_BUFF_SIZE,
-		bool beNagle = true
+		UINT serialBufferSize = MONT_SERIAL_BUFFER_SIZE,
+		uint32 sessionRecvBuffSize = MONT_SERV_SESSION_RECV_BUFF_SIZE
 	)
-		: CLanServer(serverIP, serverPort, numOfIocpConcurrentThrd, numOfWorkerThreads, maxOfConnections, true, false,
-			tlsMemPoolDefaultUnitCnt, tlsMemPoolDefaultCapacity,
-			sessionSendBuffSize, sessionRecvBuffSize
+		: CLanServer(serverIP, serverPort, numOfIocpConcurrentThrd, numOfWorkerThreads, maxOfConnections,
+			tlsMemPoolDefaultUnitCnt, tlsMemPoolDefaultCapacity, true, false,
+			serialBufferSize,
+			sessionRecvBuffSize
 		), 
 		m_LoginServerSession(-1), m_EchoGameServerSession(-1), m_ChatServerSession(-1),
 		m_ExitThread(false)
 	{
-		InitializeSRWLock(&m_MontClientSessionsSrwLock);
-
-		//m_MontDataMap.insert({1, { 0 }});
-		//m_MontDataMap.insert({2, { 0 }});
-		//m_MontDataMap.insert({3, { 0 }});
-		//m_MontDataMap.insert({4, { 0 }});
-		//m_MontDataMap.insert({5, { 0 }});
-		//m_MontDataMap.insert({6, { 0 }});
-		//							
-		//m_MontDataMap.insert({10, { 0 }});
-		//m_MontDataMap.insert({11, { 0 }});
-		//m_MontDataMap.insert({12, { 0 }});
-		//m_MontDataMap.insert({13, { 0 }});
-		//m_MontDataMap.insert({14, { 0 }});
-		//m_MontDataMap.insert({15, { 0 }});
-		//m_MontDataMap.insert({16, { 0 }});
-		//m_MontDataMap.insert({17, { 0 }});
-		//m_MontDataMap.insert({18, { 0 }});
-		//m_MontDataMap.insert({19, { 0 }});
-		//m_MontDataMap.insert({20, { 0 }});
-		//m_MontDataMap.insert({21, { 0 }});
-		//m_MontDataMap.insert({22, { 0 }});
-		//m_MontDataMap.insert({23, { 0 }});
-		//							
-		//m_MontDataMap.insert({30, { 0 }});
-		//m_MontDataMap.insert({31, { 0 }});
-		//m_MontDataMap.insert({32, { 0 }});
-		//m_MontDataMap.insert({33, { 0 }});
-		//m_MontDataMap.insert({34, { 0 }});
-		//m_MontDataMap.insert({35, { 0 }});
-		//m_MontDataMap.insert({36, { 0 }});
-		//m_MontDataMap.insert({37, { 0 }});
-		//							
-		//m_MontDataMap.insert({40, { 0 }});
-		//m_MontDataMap.insert({41, { 0 }});
-		//m_MontDataMap.insert({42, { 0 }});
-		//m_MontDataMap.insert({43, { 0 }});
-		//m_MontDataMap.insert({44, { 0 }});
+		//InitializeSRWLock(&m_MontClientSessionsSrwLock);
+		memset(m_MontClientSessions, 0, sizeof(m_MontClientSessions));
+		for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
+			m_EmptyIdxQueue.push(i);
+		}
 
 		m_MontDataVec.resize(dfMONITOR_DATA_TYPE_MAX_NUM, {0});
 	}
@@ -90,13 +70,17 @@ public:
 		}
 
 		m_PerfCounter = new PerformanceCounter();
-		//m_PerfCounter->SetCounter(MONITOR_DATA_TYPE_MONITOR_CPU_TOTAL, NULL);
 		m_PerfCounter->SetCounter(dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY, dfQUERY_MEMORY_NON_PAGED);
-		//m_PerfCounter->SetCounter(MONITOR_DATA_TYPE_MONITOR_NETWORK_RECV, NULL);
-		//m_PerfCounter->SetCounter(MONITOR_DATA_TYPE_MONITOR_NETWORK_SEND, NULL);
 		m_PerfCounter->SetCounter(dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY, dfQUERY_MEMORY_AVAILABLE);
-
 		m_PerfCounter->SetCpuUsageCounter();
+
+		m_PerfCounter->SetEthernetCounter();
+		//m_PerfCounter->SetCounter(dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV, dfQUERY_ETHERNET_BYTES_RECEIVED_SEC);
+		//m_PerfCounter->SetCounter(dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND, dfQUERY_ETHERNET_BYTES_SENT_SEC);
+
+#if defined(MONT_SERVER_MONITORING_MODE)
+		m_PerfCounter->SetProcessCounter(dfMONITOR_DATA_TYPE_MONT_SERVER_MEM, dfQUERY_PROCESS_USER_VMEMORY_USAGE, L"MonitoringServer");
+#endif
 		
 		m_MontThread = (HANDLE)_beginthreadex(NULL, 0, PerformanceCountFunc, this, 0, NULL);
 		if (m_MontThread == INVALID_HANDLE_VALUE) {
@@ -112,13 +96,19 @@ public:
 	};
 	virtual void OnClientLeave(UINT64 sessionID) {
 		std::cout << "[OnClientLeave] sessionID: " << sessionID << std::endl;
-		
-		AcquireSRWLockExclusive(&m_MontClientSessionsSrwLock);
-		if (m_MontClientSessions.find(sessionID) != m_MontClientSessions.end()) {
-			m_MontClientSessions.erase(sessionID);
-			std::cout << "[OnClientLeave] 모니터링 클라이언트 연결 종료" << std::endl;
+
+		for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
+			if (m_MontClientSessions[i] == sessionID) {
+				m_MontClientSessions[i] = 0;
+
+				m_EmptyIdxQueueMtx.lock();
+				m_EmptyIdxQueue.push(i);
+				m_EmptyIdxQueueMtx.unlock();
+				std::cout << "[OnClientLeave] 모니터링 클라이언트 연결 종료" << std::endl;
+
+				break;
+			}
 		}
-		ReleaseSRWLockExclusive(&m_MontClientSessionsSrwLock);
 
 		if (m_LoginServerSession == sessionID) {
 			m_LoginServerSession = -1;

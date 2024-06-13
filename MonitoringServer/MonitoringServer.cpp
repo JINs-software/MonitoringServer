@@ -100,24 +100,49 @@ void MonitoringServer::Process_SS_MONITOR_DATA_UPDATE(BYTE dataType, int dataVal
 
 void MonitoringServer::Process_CS_MONITOR_TOOL_LOGIN(SessionID sessionID, char* loginSessionKey)
 {
-	// 세션 ID <-> 모니터링 클라이언트 맵핑
-	if (m_MontClientSessions.find(sessionID) != m_MontClientSessions.end()) {
-		// 중복 로그인
-		DebugBreak();
+	for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
+		if (m_MontClientSessions[i] == sessionID) {
+			DebugBreak();
+		}
+	}
+
+	m_EmptyIdxQueueMtx.lock();
+	if (m_EmptyIdxQueue.empty()) {
+		return;
 	}
 	else {
-		JBuffer* resPacket = AllocSerialSendBuff(sizeof(WORD) + sizeof(BYTE));
-		*resPacket << (WORD)en_PACKET_CS_MONITOR_TOOL_RES_LOGIN;
-		*resPacket << (BYTE)dfMONITOR_TOOL_LOGIN_OK;
-		SendPacket(sessionID, resPacket);
-
-		m_MontClientSessions.insert(sessionID);
+		m_MontClientSessions[m_EmptyIdxQueue.front()] = sessionID;
+		m_EmptyIdxQueue.pop();
 	}
+	m_EmptyIdxQueueMtx.unlock();
+
+	JBuffer* resPacket = AllocSerialSendBuff(sizeof(WORD) + sizeof(BYTE));
+	*resPacket << (WORD)en_PACKET_CS_MONITOR_TOOL_RES_LOGIN;
+	*resPacket << (BYTE)dfMONITOR_TOOL_LOGIN_OK;
+	SendPacket(sessionID, resPacket);
 }
+
 
 void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 	JBuffer* sendBuff = AllocSerialBuff();
 
+#if defined (MONT_SERVER_MONITORING_MODE)
+	for (BYTE dataType = dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL; dataType <= dfMONITOR_DATA_TYPE_MONT_SERVER_CPU; dataType++) {
+		if (sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)) {
+			DebugBreak();
+		}
+		stMSG_HDR* hdr;
+		hdr = sendBuff->DirectReserve<stMSG_HDR>();
+		hdr->code = dfPACKET_CODE;
+		hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
+		hdr->randKey = (BYTE)-1;
+		stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
+		body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
+		body->DataType = dataType;
+		body->DataValue = m_MontDataVec[dataType].dataValue;
+		body->TimeStamp = m_MontDataVec[dataType].timeStamp;
+	}
+#else
 	for (BYTE dataType = dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL; dataType <= dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY; dataType++) {
 		if (sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)) {
 			DebugBreak();
@@ -133,6 +158,7 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 		body->DataValue = m_MontDataVec[dataType].dataValue;
 		body->TimeStamp = m_MontDataVec[dataType].timeStamp;
 	}
+#endif
 	if (m_MontDataVec[dfMONITOR_DATA_TYPE_LOGIN_SERVER_RUN].dataValue == 1) {
 		for (BYTE dataType = dfMONITOR_DATA_TYPE_LOGIN_SERVER_RUN; dataType <= dfMONITOR_DATA_TYPE_LOGIN_PACKET_POOL; dataType++) {
 			if (sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)) {
@@ -198,12 +224,21 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 		}
 	}
 
-	AcquireSRWLockShared(&m_MontClientSessionsSrwLock);
-	for (auto iter : m_MontClientSessions) {
+	//AcquireSRWLockShared(&m_MontClientSessionsSrwLock);
+	//for (auto iter : m_MontClientSessions) {
+	//	AddRefSerialBuff(sendBuff);
+	//	SendPacket(iter, sendBuff);
+	//}
+	//ReleaseSRWLockShared(&m_MontClientSessionsSrwLock);
+
+	for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
+		SessionID sessionID = m_MontClientSessions[i];
+		if (sessionID == 0) {
+			continue;
+		}
 		AddRefSerialBuff(sendBuff);
-		SendPacket(iter, sendBuff);
+		SendPacket(sessionID, sendBuff);
 	}
-	ReleaseSRWLockShared(&m_MontClientSessionsSrwLock);
 
 	FreeSerialBuff(sendBuff);
 }
@@ -220,17 +255,29 @@ UINT __stdcall MonitoringServer::PerformanceCountFunc(void* arg)
 		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL].dataValue = montserver->m_PerfCounter->ProcessorTotal();
 		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL].timeStamp = now;
 		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY].dataValue = montserver->m_PerfCounter->GetPerfCounterItem(dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY);
-		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY].dataValue /= 1'000'000;	// 논-페이지 풀 MBytes
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY].dataValue /= (1024 * 1024);	// 논-페이지 풀 MBytes
 		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NONPAGED_MEMORY].timeStamp = now;
-		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV].dataValue = 0;
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV].dataValue = montserver->m_PerfCounter->GetPerfEthernetRecvBytes();
+		//montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV].dataValue = montserver->m_PerfCounter->GetPerfCounterItem(dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV);
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV].dataValue /= 1024;
 		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV].timeStamp = now;
-		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND].dataValue = 0;
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND].dataValue = montserver->m_PerfCounter->GetPerfEthernetSendBytes();
+		//montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND].dataValue = montserver->m_PerfCounter->GetPerfCounterItem(dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND);
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND].dataValue /= 1024;
 		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND].timeStamp = now;
 		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY].dataValue = montserver->m_PerfCounter->GetPerfCounterItem(dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY);
 		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY].timeStamp = now;
 		
-		montserver->Send_MONT_DATA_TO_CLIENT();
+#if defined(MONT_SERVER_MONITORING_MODE)
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONT_SERVER_RUN].dataValue = 1;
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONT_SERVER_RUN].timeStamp = now;
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONT_SERVER_CPU].dataValue = montserver->m_PerfCounter->ProcessTotal();
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONT_SERVER_CPU].timeStamp = now;
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONT_SERVER_MEM].dataValue = montserver->m_PerfCounter->GetPerfCounterItem(dfMONITOR_DATA_TYPE_MONT_SERVER_MEM);
+		montserver->m_MontDataVec[dfMONITOR_DATA_TYPE_MONT_SERVER_MEM].timeStamp = now;
+#endif
 
+		montserver->Send_MONT_DATA_TO_CLIENT();
 
 		Sleep(1000);
 	}

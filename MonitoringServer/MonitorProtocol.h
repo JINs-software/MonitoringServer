@@ -166,6 +166,10 @@ enum en_PACKET_SS_MONITOR_DATA_UPDATE
 	dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND		= 43,		// 서버컴퓨터 네트워크 송신량 KByte
 	dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY	= 44,		// 서버컴퓨터 사용가능 메모리
 
+	dfMONITOR_DATA_TYPE_MONT_SERVER_RUN = 45,					// 모니터링 서버 실행 여부 ON / OFF
+	dfMONITOR_DATA_TYPE_MONT_SERVER_CPU = 46,					// 모니터링 서버 CPU 사용률
+	dfMONITOR_DATA_TYPE_MONT_SERVER_MEM = 47,					// 모니터링 서버 메모리 사용량
+
 	dfMONITOR_DATA_TYPE_MAX_NUM						= 50
 };
 
