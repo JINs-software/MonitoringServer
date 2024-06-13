@@ -8,7 +8,7 @@ int main() {
 	//	UINT serialBufferSize = MONT_SERIAL_BUFFER_SIZE,
 	//	uint32 sessionRecvBuffSize = MONT_SERV_SESSION_RECV_BUFF_SIZE
 	//)
-	MonitoringServer montserver(MONT_SERVER_IP, MONT_SERVER_PORT, 0, 1, 10);
+	MonitoringServer montserver(MONT_DB_CONN_COUNT, MOND_ODBC_CONNECTION_STRING, MONT_SERVER_IP, MONT_SERVER_PORT, 0, 1, 10);
 
 	montserver.Start();
 

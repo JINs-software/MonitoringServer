@@ -1,20 +1,29 @@
 #pragma once
-#include "CLanServer.h"
+#include "CLanOdbcServer.h"
 #include "PerformanceCounter.h"
 #include "MontServerConfig.h"
 #include "MonitorProtocol.h"
 
 using SessionID = UINT64;
 
-class MonitoringServer : public CLanServer
+class MonitoringServer : public CLanOdbcServer
 {
 private:
 	struct stMontData {
 		int dataValue = 0;
 		int timeStamp = 0;
+
+		int dataValueAccumulate = 0;
+		int accunmulateCnt = 0;
+
+		int dataAvr = 0;
+		int dataMin = 0;
+		int dataMax = 0;
 	};
-	//std::map<BYTE, stMontData> m_MontDataMap;
+	
 	std::vector<stMontData>		m_MontDataVec;
+
+	PerformanceCounter* m_PerfCounter;
 
 	// 모니터링 대상 서버
 	SessionID				m_LoginServerSession;
@@ -27,10 +36,13 @@ private:
 	std::queue<BYTE>		m_EmptyIdxQueue;
 	std::mutex				m_EmptyIdxQueueMtx;
 
+	
 	HANDLE					m_MontThread;
-	bool					m_ExitThread;
+	
+	DBConnection*			m_DbConnection;
+	HANDLE					m_DbConnThread;
 
-	PerformanceCounter*		m_PerfCounter;
+	bool					m_ExitThread;
 
 public:
 	//CLanServer(const char* serverIP, uint16 serverPort,
@@ -41,19 +53,24 @@ public:
 	//	uint32 sessionRecvBuffSize = SESSION_RECV_BUFFER_DEFAULT_SIZE,
 	//	bool beNagle = true, bool zeroCopySend = false
 	//);
-	MonitoringServer(const char* serverIP, uint16 serverPort,
+	MonitoringServer(
+		int32 dbConnectionCnt, const WCHAR* odbcConnStr,
+		const char* serverIP, uint16 serverPort,
 		DWORD numOfIocpConcurrentThrd, uint16 numOfWorkerThreads, uint16 maxOfConnections,
 		size_t tlsMemPoolDefaultUnitCnt = MONT_TLS_MEM_POOL_DEFAULT_UNIT_CNT, size_t tlsMemPoolDefaultCapacity = MONT_TLS_MEM_POOL_DEFAULT_UNIT_CAPACITY,
 		UINT serialBufferSize = MONT_SERIAL_BUFFER_SIZE,
 		uint32 sessionRecvBuffSize = MONT_SERV_SESSION_RECV_BUFF_SIZE
 	)
-		: CLanServer(serverIP, serverPort, numOfIocpConcurrentThrd, numOfWorkerThreads, maxOfConnections,
+		: CLanOdbcServer(
+			dbConnectionCnt, odbcConnStr,
+			serverIP, serverPort, numOfIocpConcurrentThrd, numOfWorkerThreads, maxOfConnections,
 			tlsMemPoolDefaultUnitCnt, tlsMemPoolDefaultCapacity, true, false,
 			serialBufferSize,
 			sessionRecvBuffSize
-		), 
+		),
 		m_LoginServerSession(-1), m_EchoGameServerSession(-1), m_ChatServerSession(-1),
-		m_ExitThread(false)
+		m_ExitThread(false),
+		m_PerfCounter(NULL), m_DbConnection(NULL)
 	{
 		//InitializeSRWLock(&m_MontClientSessionsSrwLock);
 		memset(m_MontClientSessions, 0, sizeof(m_MontClientSessions));
@@ -81,6 +98,9 @@ public:
 #if defined(MONT_SERVER_MONITORING_MODE)
 		m_PerfCounter->SetProcessCounter(dfMONITOR_DATA_TYPE_MONT_SERVER_MEM, dfQUERY_PROCESS_USER_VMEMORY_USAGE, L"MonitoringServer");
 #endif
+
+		// DB 연결
+		m_DbConnection = HoldDBConnection();
 		
 		m_MontThread = (HANDLE)_beginthreadex(NULL, 0, PerformanceCountFunc, this, 0, NULL);
 		if (m_MontThread == INVALID_HANDLE_VALUE) {
@@ -131,6 +151,16 @@ public:
 
 	void Send_MONT_DATA_TO_CLIENT();
 
+	//int32_t serverno = 1;
+	//int32_t type = 0;
+	//int32_t avr = 150;
+	//int32_t min = 100;
+	//int32_t max = 200;
+
+	wstring Create_LogDbTable(SQL_TIMESTAMP_STRUCT  currentTime);
+	void Insert_LogDB(const wstring& tableName, SQL_TIMESTAMP_STRUCT  currentTime, int serverNo, int type, int dataAvr, int dataMin, int dataMax);
+
 	static UINT __stdcall PerformanceCountFunc(void* arg);
+	static UINT __stdcall LoggingToDbFunc(void* arg);
 };
 
