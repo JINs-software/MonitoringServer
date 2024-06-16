@@ -1,5 +1,7 @@
 #pragma once
 
+#define MONTSERVER_ASSERT
+
 #define MONT_DB_CONN_COUNT							1
 #define MOND_ODBC_CONNECTION_STRING					L"Driver={MySQL ODBC 8.4 ANSI Driver};Server=10.0.1.2;Database=chattingserver;User=mainserver;Password=607281;Option=3;"
 
@@ -9,9 +11,7 @@
 #define MONT_TLS_MEM_POOL_DEFAULT_UNIT_CNT			10
 #define MONT_TLS_MEM_POOL_DEFAULT_UNIT_CAPACITY		10
 
-#define MONT_SERIAL_BUFFER_SIZE						300
+#define MONT_SERIAL_BUFFER_SIZE						500
 #define MONT_SERV_SESSION_RECV_BUFF_SIZE			1000
 
 #define dfMAX_NUM_OF_MONT_CLIENT_TOOL				5
-
-#define MONT_SERVER_MONITORING_MODE

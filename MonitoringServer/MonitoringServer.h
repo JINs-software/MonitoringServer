@@ -29,8 +29,6 @@ private:
 	SessionID				m_LoginServerSession;
 	SessionID				m_EchoGameServerSession;
 	SessionID				m_ChatServerSession;
-	//std::set<SessionID>		m_MontClientSessions;
-	//SRWLOCK					m_MontClientSessionsSrwLock;
 
 	SessionID				m_MontClientSessions[dfMAX_NUM_OF_MONT_CLIENT_TOOL];
 	std::queue<BYTE>		m_EmptyIdxQueue;
@@ -45,14 +43,6 @@ private:
 	bool					m_ExitThread;
 
 public:
-	//CLanServer(const char* serverIP, uint16 serverPort,
-	//	DWORD numOfIocpConcurrentThrd, uint16 numOfWorkerThreads, uint16 maxOfConnections,
-	//	size_t tlsMemPoolDefaultUnitCnt = 0, size_t tlsMemPoolDefaultUnitCapacity = 0,
-	//	bool tlsMemPoolReferenceFlag = false, bool tlsMemPoolPlacementNewFlag = false,
-	//	UINT serialBufferSize = DEFAULT_SERIAL_BUFFER_SIZE,
-	//	uint32 sessionRecvBuffSize = SESSION_RECV_BUFFER_DEFAULT_SIZE,
-	//	bool beNagle = true, bool zeroCopySend = false
-	//);
 	MonitoringServer(
 		int32 dbConnectionCnt, const WCHAR* odbcConnStr,
 		const char* serverIP, uint16 serverPort,
@@ -72,7 +62,6 @@ public:
 		m_ExitThread(false),
 		m_PerfCounter(NULL), m_DbConnection(NULL)
 	{
-		//InitializeSRWLock(&m_MontClientSessionsSrwLock);
 		memset(m_MontClientSessions, 0, sizeof(m_MontClientSessions));
 		for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
 			m_EmptyIdxQueue.push(i);
@@ -92,8 +81,6 @@ public:
 		m_PerfCounter->SetCpuUsageCounter();
 
 		m_PerfCounter->SetEthernetCounter();
-		//m_PerfCounter->SetCounter(dfMONITOR_DATA_TYPE_MONITOR_NETWORK_RECV, dfQUERY_ETHERNET_BYTES_RECEIVED_SEC);
-		//m_PerfCounter->SetCounter(dfMONITOR_DATA_TYPE_MONITOR_NETWORK_SEND, dfQUERY_ETHERNET_BYTES_SENT_SEC);
 
 #if defined(MONT_SERVER_MONITORING_MODE)
 		m_PerfCounter->SetProcessCounter(dfMONITOR_DATA_TYPE_MONT_SERVER_MEM, dfQUERY_PROCESS_USER_VMEMORY_USAGE, L"MonitoringServer");
@@ -101,13 +88,24 @@ public:
 
 		// DB 연결
 		m_DbConnection = HoldDBConnection();
+
+		// DB 스레드
+		m_DbConnThread = (HANDLE)_beginthreadex(NULL, 0, LoggingToDbFunc, this, 0, NULL);
+		if (m_DbConnThread == INVALID_HANDLE_VALUE) {
+			return false;
+		}
 		
+		// 모니터링 서버 스레드
 		m_MontThread = (HANDLE)_beginthreadex(NULL, 0, PerformanceCountFunc, this, 0, NULL);
 		if (m_MontThread == INVALID_HANDLE_VALUE) {
 			return false;
 		}
 
 		return true;
+	}
+	void Stop() {
+		m_ExitThread = true;
+		CLanServer::Stop();
 	}
 
 	virtual void OnRecv(UINT64 sessionID, JBuffer& recvBuff) override;
@@ -150,12 +148,6 @@ public:
 	void Process_CS_MONITOR_TOOL_LOGIN(SessionID sessionID, char* loginSessionKey);
 
 	void Send_MONT_DATA_TO_CLIENT();
-
-	//int32_t serverno = 1;
-	//int32_t type = 0;
-	//int32_t avr = 150;
-	//int32_t min = 100;
-	//int32_t max = 200;
 
 	wstring Create_LogDbTable(SQL_TIMESTAMP_STRUCT  currentTime);
 	void Insert_LogDB(const wstring& tableName, SQL_TIMESTAMP_STRUCT  currentTime, int serverNo, int type, int dataAvr, int dataMin, int dataMax);
