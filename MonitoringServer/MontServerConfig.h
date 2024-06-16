@@ -1,6 +1,9 @@
 #pragma once
 
-#define MONTSERVER_ASSERT
+//#define MONTSERVER_ASSERT
+
+#define MONTSERVER_PROTOCOL_CODE					109
+#define MONTSERVER_PACKET_KEY						30
 
 #define MONT_DB_CONN_COUNT							1
 #define MOND_ODBC_CONNECTION_STRING					L"Driver={MySQL ODBC 8.4 ANSI Driver};Server=10.0.1.2;Database=chattingserver;User=mainserver;Password=607281;Option=3;"

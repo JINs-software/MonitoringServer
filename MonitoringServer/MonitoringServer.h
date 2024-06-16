@@ -49,14 +49,16 @@ public:
 		DWORD numOfIocpConcurrentThrd, uint16 numOfWorkerThreads, uint16 maxOfConnections,
 		size_t tlsMemPoolDefaultUnitCnt = MONT_TLS_MEM_POOL_DEFAULT_UNIT_CNT, size_t tlsMemPoolDefaultCapacity = MONT_TLS_MEM_POOL_DEFAULT_UNIT_CAPACITY,
 		UINT serialBufferSize = MONT_SERIAL_BUFFER_SIZE,
-		uint32 sessionRecvBuffSize = MONT_SERV_SESSION_RECV_BUFF_SIZE
+		uint32 sessionRecvBuffSize = MONT_SERV_SESSION_RECV_BUFF_SIZE,
+		BYTE protocolCode = MONTSERVER_PROTOCOL_CODE, BYTE packetKey = MONTSERVER_PACKET_KEY
 	)
 		: CLanOdbcServer(
 			dbConnectionCnt, odbcConnStr,
 			serverIP, serverPort, numOfIocpConcurrentThrd, numOfWorkerThreads, maxOfConnections,
 			tlsMemPoolDefaultUnitCnt, tlsMemPoolDefaultCapacity, true, false,
 			serialBufferSize,
-			sessionRecvBuffSize
+			sessionRecvBuffSize,
+			protocolCode, packetKey
 		),
 		m_LoginServerSession(-1), m_EchoGameServerSession(-1), m_ChatServerSession(-1),
 		m_ExitThread(false),

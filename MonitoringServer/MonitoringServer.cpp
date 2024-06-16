@@ -177,14 +177,16 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 		}
 		stMSG_HDR* hdr;
 		hdr = sendBuff->DirectReserve<stMSG_HDR>();
-		hdr->code = dfPACKET_CODE;
+		hdr->code = MONTSERVER_PROTOCOL_CODE;
 		hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
-		hdr->randKey = (BYTE)-1;
+		hdr->randKey = GetRandomKey();
 		stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
 		body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 		body->DataType = dataType;
 		body->DataValue = m_MontDataVec[dataType].dataValue;
 		body->TimeStamp = m_MontDataVec[dataType].timeStamp;
+
+		Encode(hdr->randKey, hdr->len, hdr->checkSum, (BYTE*)body, MONTSERVER_PACKET_KEY);
 	}
 #endif
 	if (m_MontDataVec[dfMONITOR_DATA_TYPE_LOGIN_SERVER_RUN].dataValue == 1) {
@@ -194,14 +196,16 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 			}
 			stMSG_HDR* hdr;
 			hdr = sendBuff->DirectReserve<stMSG_HDR>();
-			hdr->code = dfPACKET_CODE;
+			hdr->code = MONTSERVER_PROTOCOL_CODE;
 			hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
-			hdr->randKey = (BYTE)-1;
+			hdr->randKey = GetRandomKey();
 			stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
 			body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 			body->DataType = dataType;
 			body->DataValue = m_MontDataVec[dataType].dataValue;
 			body->TimeStamp = m_MontDataVec[dataType].timeStamp;
+
+			Encode(hdr->randKey, hdr->len, hdr->checkSum, (BYTE*)body, MONTSERVER_PACKET_KEY);
 		}
 
 		// 타임 아웃 체크
@@ -216,14 +220,16 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 			}
 			stMSG_HDR* hdr;
 			hdr = sendBuff->DirectReserve<stMSG_HDR>();
-			hdr->code = dfPACKET_CODE;
+			hdr->code = MONTSERVER_PROTOCOL_CODE;
 			hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
-			hdr->randKey = (BYTE)-1;
+			hdr->randKey = GetRandomKey();
 			stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
 			body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 			body->DataType = dataType;
 			body->DataValue = m_MontDataVec[dataType].dataValue;
 			body->TimeStamp = m_MontDataVec[dataType].timeStamp;
+
+			Encode(hdr->randKey, hdr->len, hdr->checkSum, (BYTE*)body, MONTSERVER_PACKET_KEY);
 		}
 
 		if (time(NULL) > m_MontDataVec[dfMONITOR_DATA_TYPE_GAME_SERVER_RUN].timeStamp + 10) {
@@ -237,14 +243,16 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 			}
 			stMSG_HDR* hdr;
 			hdr = sendBuff->DirectReserve<stMSG_HDR>();
-			hdr->code = dfPACKET_CODE;
+			hdr->code = MONTSERVER_PROTOCOL_CODE;
 			hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
-			hdr->randKey = (BYTE)-1;
+			hdr->randKey = GetRandomKey();
 			stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
 			body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 			body->DataType = dataType;
 			body->DataValue = m_MontDataVec[dataType].dataValue;
 			body->TimeStamp = m_MontDataVec[dataType].timeStamp;
+
+			Encode(hdr->randKey, hdr->len, hdr->checkSum, (BYTE*)body, MONTSERVER_PACKET_KEY);
 		}
 
 		if (time(NULL) > m_MontDataVec[dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN].timeStamp + 10) {
@@ -265,7 +273,7 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 			continue;
 		}
 		AddRefSerialBuff(sendBuff);
-		SendPacket(sessionID, sendBuff);
+		SendPacket(sessionID, sendBuff, true);
 	}
 
 	FreeSerialBuff(sendBuff);
