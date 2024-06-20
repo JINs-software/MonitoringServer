@@ -23,7 +23,7 @@ private:
 	
 	std::vector<stMontData>		m_MontDataVec;
 
-	PerformanceCounter* m_PerfCounter;
+	PerformanceCounter*			m_PerfCounter;
 
 	// 모니터링 대상 서버
 	SessionID				m_LoginServerSession;
@@ -73,7 +73,7 @@ public:
 	}
 
 	bool Start() {
-		if (!CLanServer::Start()) {
+		if (!CLanOdbcServer::Start()) {
 			return false;
 		}
 
@@ -107,7 +107,7 @@ public:
 	}
 	void Stop() {
 		m_ExitThread = true;
-		CLanServer::Stop();
+		CLanOdbcServer::Stop();
 	}
 
 	virtual void OnRecv(UINT64 sessionID, JBuffer& recvBuff) override;
@@ -126,7 +126,7 @@ public:
 				m_EmptyIdxQueueMtx.unlock();
 				std::cout << "[OnClientLeave] 모니터링 클라이언트 연결 종료" << std::endl;
 
-				break;
+				return;
 			}
 		}
 
@@ -147,7 +147,7 @@ public:
 
 	void Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverNo);
 	void Process_SS_MONITOR_DATA_UPDATE(BYTE dataType, int dataVal, int timeStamp);
-	void Process_CS_MONITOR_TOOL_LOGIN(SessionID sessionID, char* loginSessionKey);
+	bool Process_CS_MONITOR_TOOL_LOGIN(SessionID sessionID, char* loginSessionKey);
 
 	void Send_MONT_DATA_TO_CLIENT();
 

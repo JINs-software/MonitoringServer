@@ -47,7 +47,10 @@ void MonitoringServer::OnRecv(UINT64 sessionID, JBuffer& recvBuff)
 			recvBuff >> type;
 			char	loginSessionKey[32];
 			recvBuff.Dequeue((BYTE*)loginSessionKey, sizeof(loginSessionKey));
-			Process_CS_MONITOR_TOOL_LOGIN(sessionID, loginSessionKey);
+			if (!Process_CS_MONITOR_TOOL_LOGIN(sessionID, loginSessionKey)) {
+				Disconnect(sessionID);
+				return;
+			}
 		}
 		break;
 		default:
@@ -77,6 +80,7 @@ void MonitoringServer::Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverN
 		}
 		else {
 			// 중복 로그인
+			std::cout << "로그인 서버 중복 로그인" << std::endl;
 			DebugBreak();
 		}
 	}
@@ -88,6 +92,7 @@ void MonitoringServer::Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverN
 		}
 		else {
 			// 중복 로그인
+			std::cout << "에코 서버 중복 로그인" << std::endl;
 			DebugBreak();
 		}
 	}
@@ -99,6 +104,7 @@ void MonitoringServer::Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverN
 		}
 		else {
 			// 중복 로그인
+			std::cout << "채팅 서버 중복 로그인" << std::endl;
 			DebugBreak();
 		}
 	}
@@ -124,19 +130,25 @@ void MonitoringServer::Process_SS_MONITOR_DATA_UPDATE(BYTE dataType, int dataVal
 	}
 }
 
-void MonitoringServer::Process_CS_MONITOR_TOOL_LOGIN(SessionID sessionID, char* loginSessionKey)
+bool MonitoringServer::Process_CS_MONITOR_TOOL_LOGIN(SessionID sessionID, char* loginSessionKey)
 {
 #if defined(MONTSERVER_ASSERT)
 	for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
 		if (m_MontClientSessions[i] == sessionID) {
+#if defined(MONTSERVER_ASSERT)
 			DebugBreak();
+#else
+			std::cout << "모니터링 클라이언트 툴 중복 로그인" << std::endl;
+			return;
+#endif
 		}
 	}
 #endif
-
+	bool idxQueueEmpty = false;
 	m_EmptyIdxQueueMtx.lock();
 	if (m_EmptyIdxQueue.empty()) {
-		return;
+		std::cout << "모니터링 클라이언트 툴 가용 접속 수 초과(로그인 불가)" << std::endl;
+		idxQueueEmpty = true;
 	}
 	else {
 		m_MontClientSessions[m_EmptyIdxQueue.front()] = sessionID;
@@ -144,10 +156,17 @@ void MonitoringServer::Process_CS_MONITOR_TOOL_LOGIN(SessionID sessionID, char* 
 	}
 	m_EmptyIdxQueueMtx.unlock();
 
-	JBuffer* resPacket = AllocSerialSendBuff(sizeof(WORD) + sizeof(BYTE));
-	*resPacket << (WORD)en_PACKET_CS_MONITOR_TOOL_RES_LOGIN;
-	*resPacket << (BYTE)dfMONITOR_TOOL_LOGIN_OK;
-	SendPacket(sessionID, resPacket);
+	if (!idxQueueEmpty) {
+		JBuffer* resPacket = AllocSerialSendBuff(sizeof(WORD) + sizeof(BYTE));
+		*resPacket << (WORD)en_PACKET_CS_MONITOR_TOOL_RES_LOGIN;
+		*resPacket << (BYTE)dfMONITOR_TOOL_LOGIN_OK;
+		SendPacket(sessionID, resPacket);
+
+		return true;
+	}
+	else {
+		return false;
+	}
 }
 
 
@@ -173,39 +192,37 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 #else
 	for (BYTE dataType = dfMONITOR_DATA_TYPE_MONITOR_CPU_TOTAL; dataType <= dfMONITOR_DATA_TYPE_MONITOR_AVAILABLE_MEMORY; dataType++) {
 		if (sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)) {
+			std::cout << "sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)" << std::endl;
 			DebugBreak();
 		}
 		stMSG_HDR* hdr;
 		hdr = sendBuff->DirectReserve<stMSG_HDR>();
 		hdr->code = MONTSERVER_PROTOCOL_CODE;
 		hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
-		hdr->randKey = GetRandomKey();
+		hdr->randKey = (BYTE)-1;
 		stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
 		body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 		body->DataType = dataType;
 		body->DataValue = m_MontDataVec[dataType].dataValue;
 		body->TimeStamp = m_MontDataVec[dataType].timeStamp;
-
-		Encode(hdr->randKey, hdr->len, hdr->checkSum, (BYTE*)body, MONTSERVER_PACKET_KEY);
 	}
 #endif
 	if (m_MontDataVec[dfMONITOR_DATA_TYPE_LOGIN_SERVER_RUN].dataValue == 1) {
 		for (BYTE dataType = dfMONITOR_DATA_TYPE_LOGIN_SERVER_RUN; dataType <= dfMONITOR_DATA_TYPE_LOGIN_PACKET_POOL; dataType++) {
 			if (sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)) {
+				std::cout << "sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)" << std::endl;
 				DebugBreak();
 			}
 			stMSG_HDR* hdr;
 			hdr = sendBuff->DirectReserve<stMSG_HDR>();
 			hdr->code = MONTSERVER_PROTOCOL_CODE;
 			hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
-			hdr->randKey = GetRandomKey();
+			hdr->randKey = (BYTE)-1;
 			stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
 			body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 			body->DataType = dataType;
 			body->DataValue = m_MontDataVec[dataType].dataValue;
 			body->TimeStamp = m_MontDataVec[dataType].timeStamp;
-
-			Encode(hdr->randKey, hdr->len, hdr->checkSum, (BYTE*)body, MONTSERVER_PACKET_KEY);
 		}
 
 		// 타임 아웃 체크
@@ -216,20 +233,19 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 	if (m_MontDataVec[dfMONITOR_DATA_TYPE_GAME_SERVER_RUN].dataValue == 1) {
 		for (BYTE dataType = dfMONITOR_DATA_TYPE_GAME_SERVER_RUN; dataType <= dfMONITOR_DATA_TYPE_GAME_PACKET_POOL; dataType++) {
 			if (sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)) {
+				std::cout << "sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)" << std::endl;
 				DebugBreak();
 			}
 			stMSG_HDR* hdr;
 			hdr = sendBuff->DirectReserve<stMSG_HDR>();
 			hdr->code = MONTSERVER_PROTOCOL_CODE;
 			hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
-			hdr->randKey = GetRandomKey();
+			hdr->randKey = (BYTE)-1;
 			stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
 			body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 			body->DataType = dataType;
 			body->DataValue = m_MontDataVec[dataType].dataValue;
 			body->TimeStamp = m_MontDataVec[dataType].timeStamp;
-
-			Encode(hdr->randKey, hdr->len, hdr->checkSum, (BYTE*)body, MONTSERVER_PACKET_KEY);
 		}
 
 		if (time(NULL) > m_MontDataVec[dfMONITOR_DATA_TYPE_GAME_SERVER_RUN].timeStamp + 10) {
@@ -239,20 +255,19 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 	if (m_MontDataVec[dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN].dataValue == 1) {
 		for (BYTE dataType = dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN; dataType <= dfMONITOR_DATA_TYPE_CHAT_UPDATEMSG_POOL; dataType++) {
 			if (sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)) {
+				std::cout << "sendBuff->GetFreeSize() < sizeof(stMSG_HDR) + sizeof(stMSG_MONT_DATA_UPDATE)" << std::endl;
 				DebugBreak();
 			}
 			stMSG_HDR* hdr;
 			hdr = sendBuff->DirectReserve<stMSG_HDR>();
 			hdr->code = MONTSERVER_PROTOCOL_CODE;
 			hdr->len = sizeof(stMSG_MONT_DATA_UPDATE);
-			hdr->randKey = GetRandomKey();
+			hdr->randKey = (BYTE)-1;
 			stMSG_MONT_DATA_UPDATE* body = sendBuff->DirectReserve<stMSG_MONT_DATA_UPDATE>();
 			body->Type = en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE;
 			body->DataType = dataType;
 			body->DataValue = m_MontDataVec[dataType].dataValue;
 			body->TimeStamp = m_MontDataVec[dataType].timeStamp;
-
-			Encode(hdr->randKey, hdr->len, hdr->checkSum, (BYTE*)body, MONTSERVER_PACKET_KEY);
 		}
 
 		if (time(NULL) > m_MontDataVec[dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN].timeStamp + 10) {
@@ -260,20 +275,13 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 		}
 	}
 
-	//AcquireSRWLockShared(&m_MontClientSessionsSrwLock);
-	//for (auto iter : m_MontClientSessions) {
-	//	AddRefSerialBuff(sendBuff);
-	//	SendPacket(iter, sendBuff);
-	//}
-	//ReleaseSRWLockShared(&m_MontClientSessionsSrwLock);
-
 	for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
 		SessionID sessionID = m_MontClientSessions[i];
 		if (sessionID == 0) {
 			continue;
 		}
 		AddRefSerialBuff(sendBuff);
-		SendPacket(sessionID, sendBuff, true);
+		SendPacket(sessionID, sendBuff);
 	}
 
 	FreeSerialBuff(sendBuff);
@@ -517,7 +525,7 @@ UINT __stdcall MonitoringServer::LoggingToDbFunc(void* arg)
 
 		wstring tableName = montserver->Create_LogDbTable(timestamp);
 		if (tableName == L"") {
-			std::cout << ">Create_LogDbTable 실패....!" << std::endl;
+			std::cout << ">Create_LogDbTable 실패 반환!" << std::endl;
 			break;
 		}
 

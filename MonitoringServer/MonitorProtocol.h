@@ -119,7 +119,7 @@ enum en_PACKET_TYPE
 	//	}
 	//
 	//------------------------------------------------------------
-	en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE,
+	en_PACKET_CS_MONITOR_TOOL_DATA_UPDATE
 
 
 };
