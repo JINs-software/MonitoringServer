@@ -68,6 +68,40 @@ void MonitoringServer::OnRecv(UINT64 sessionID, JBuffer& recvBuff)
 #endif
 }
 
+void MonitoringServer::OnClientJoin(UINT64 sessionID, const SOCKADDR_IN& clientSockAddr) {
+	std::cout << "[OnClientJoin] sessionID: " << sessionID << std::endl;
+};
+void MonitoringServer::OnClientLeave(UINT64 sessionID) {
+	std::cout << "[OnClientLeave] sessionID: " << sessionID << std::endl;
+
+	for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
+		if (m_MontClientSessions[i] == sessionID) {
+			m_MontClientSessions[i] = 0;
+
+			m_EmptyIdxQueueMtx.lock();
+			m_EmptyIdxQueue.push(i);
+			m_EmptyIdxQueueMtx.unlock();
+			std::cout << "[OnClientLeave] 모니터링 클라이언트 연결 종료" << std::endl;
+
+			return;
+		}
+	}
+
+	if (m_LoginServerSession == sessionID) {
+		m_LoginServerSession = -1;
+		std::cout << "[OnClientLeave] 로그인 서버 연결 종료" << std::endl;
+	}
+	else if (m_EchoGameServerSession == sessionID) {
+		m_EchoGameServerSession = -1;
+		std::cout << "[OnClientLeave] 에코 게임 서버 연결 종료" << std::endl;
+	}
+	else if (m_ChatServerSession == sessionID) {
+		m_ChatServerSession = -1;
+		std::cout << "[OnClientLeave] 채팅 서버 연결 종료" << std::endl;
+	}
+
+};
+
 void MonitoringServer::Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverNo)
 {
 	// 세션 ID <-> 서버 종류 맵핑
@@ -291,78 +325,63 @@ void MonitoringServer::Send_MONT_DATA_TO_CLIENT() {
 
 wstring MonitoringServer::Create_LogDbTable(SQL_TIMESTAMP_STRUCT  currentTime)
 {
-	m_DbConnection->Unbind();
+	/***************************************
+	* DB 커넥션 타임아웃에 대비한 코드로 변경
+	* *************************************/
 
-	SQLLEN logtimeLen = sizeof(currentTime);
-	SQLLEN len = 0;
-
-	// 테이블 이름 (_month)
+	// 테이블 이름 (_month), 테이블 존재 여부 확인 쿼리
 	std::wstringstream tableName;
-	tableName << L"monitorlog_" << currentTime.year << (currentTime.month < 10 ? L"0" : L"") << currentTime.month;
+	tableName << DB_TABLE_NAME << currentTime.year << (currentTime.month < 10 ? L"0" : L"") << currentTime.month;
+	std::wstringstream checkTableQuerySS;
+	checkTableQuerySS << L"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'logdb' AND table_name = '" << tableName.str() << L"'";
+	wstring checkTableQueryStr = checkTableQuerySS.str();
+	const WCHAR* checkTableQuery = checkTableQueryStr.c_str();
 
-	// 테이블 존재 여부 확인 쿼리
-	std::wstringstream checkTableQuery;
-	checkTableQuery << L"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'logdb' AND table_name = '" << tableName.str() << L"'";
+	// 테이블 생성 쿼리 
+	std::wstringstream createTableQuerySS;
+	createTableQuerySS << L"CREATE TABLE `logdb`.`" << tableName.str() << L"` ("
+		<< L"`no` BIGINT NOT NULL AUTO_INCREMENT, "
+		<< L"`logtime` DATETIME, "
+		<< L"`serverno` INT NOT NULL, "
+		<< L"`type` INT NOT NULL, "
+		<< L"`avr` INT NOT NULL, "
+		<< L"`min` INT NOT NULL, "
+		<< L"`max` INT NOT NULL, "
+		<< L"PRIMARY KEY(`no`))";
+	wstring createTableQueryStr = createTableQuerySS.str();
+	const WCHAR* createTableQuery = createTableQueryStr.c_str();
 
-	wstring queryStr = checkTableQuery.str();
-	const WCHAR* query = queryStr.c_str();
-	if (!m_DbConnection->Execute(query)) {
-#if defined(MONTSERVER_ASSERT)
-		DebugBreak();
-#else
-		std::cout << "테이블 존재 여부 확인 쿼리 Execute 실패!!!" << std::endl;
-		return L"";
-#endif
-	}
+	DBConnection* dbConn;
+	bool dbProcSuccess = false;
+	while (!dbProcSuccess) {
+		// DB 커넥션 할당
+		while ((dbConn = HoldDBConnection()) == NULL);	// DBConnection 획득까지 polling
 
-	bool tableExists = false;
-	m_DbConnection->Fetch();
-	INT32 sqlData;
-	if (!m_DbConnection->GetSQLData(sqlData)) {
-#if defined(MONTSERVER_ASSERT)
-		DebugBreak();
-#else
-		std::cout << "테이블 존재 여부 확인 쿼리 전송 후 GetSQLData 실패 반환!!!" << std::endl;
-		return L"";
-#endif
-	}
-	else {
-		if (sqlData > 0) {
-			tableExists = true;
+		UnBind(dbConn);
+
+		if (!ExecQuery(dbConn, checkTableQuery)) {
+			// 커넥션 반환, 연결 끊김 전달, 재연결 요청
+			FreeDBConnection(dbConn, true, true);
 		}
-	}
-
-	// 새로운 테이블 생성 쿼리(월 별)
-	if (!tableExists) {
-		m_DbConnection->Unbind();
-
-		std::wstringstream createTableQuery;
-		createTableQuery << L"CREATE TABLE `logdb`.`" << tableName.str() << L"` ("
-			<< L"`no` BIGINT NOT NULL AUTO_INCREMENT, "
-			<< L"`logtime` DATETIME, "
-			<< L"`serverno` INT NOT NULL, "
-			<< L"`type` INT NOT NULL, "
-			<< L"`avr` INT NOT NULL, "
-			<< L"`min` INT NOT NULL, "
-			<< L"`max` INT NOT NULL, "
-			<< L"PRIMARY KEY(`no`))";
-
-		// 테이블 생성
-		queryStr = createTableQuery.str();
-		query = queryStr.c_str();
-		if (!m_DbConnection->Execute(query)) {
-#if defined(MONTSERVER_ASSERT)
-			DebugBreak();
-#else
-			std::cout << "새로운 테이블 생성 쿼리(월 별) Execute 실패!!!" << std::endl;
-			return L"";
-#endif
-		}
-#if defined(MONT_SERVER_DB_CONSOLE_LOG)
 		else {
-			std::wcout << L"[DB] Create Table: logdb." << tableName.str() << std::endl;
+			if (FetchQuery(dbConn)) {
+				INT32 sqlData;
+				if (dbConn->GetSQLData(sqlData)) {
+					if (sqlData == 0) {
+						UnBind(dbConn);
+						if (!ExecQuery(dbConn, createTableQuery)) {
+							// 커넥션 반환, 연결 끊김 전달, 재연결 요청
+							FreeDBConnection(dbConn, true, true);
+							continue;
+						}
+					}
+
+					dbProcSuccess = true;	// 테이블 존재 확인 or 새로운 테이블 생성 완료
+				}
+			}
+
+			FreeDBConnection(dbConn);
 		}
-#endif
 	}
 
 	return tableName.str();
@@ -370,36 +389,36 @@ wstring MonitoringServer::Create_LogDbTable(SQL_TIMESTAMP_STRUCT  currentTime)
 
 void MonitoringServer::Insert_LogDB(const wstring& tableName, SQL_TIMESTAMP_STRUCT  currentTime, int serverNo, int type, int dataAvr, int dataMin, int dataMax)
 {
-	m_DbConnection->Unbind();
-
-	SQLLEN logtimeLen = sizeof(currentTime);
-	SQLLEN len = 0;
-
-	// 인자 바인딩
-	m_DbConnection->BindParam(1, SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP, logtimeLen, &currentTime, &logtimeLen);
-	m_DbConnection->BindParam(2, SQL_C_LONG, SQL_INTEGER, sizeof(serverNo), &serverNo, &len);
-	m_DbConnection->BindParam(3, SQL_C_LONG, SQL_INTEGER, sizeof(type), &type, &len);
-	m_DbConnection->BindParam(4, SQL_C_LONG, SQL_INTEGER, sizeof(dataAvr), &dataAvr, &len);
-	m_DbConnection->BindParam(5, SQL_C_LONG, SQL_INTEGER, sizeof(dataMin), &dataMin, &len);
-	m_DbConnection->BindParam(6, SQL_C_LONG, SQL_INTEGER, sizeof(dataMax), &dataMax, &len);
-
 	// 로그 행 삽입 SQL 실행
 	wstring queryWstr = L"INSERT INTO `logdb`.`" + tableName + L"` (`logtime`, `serverno`, `type`, `avr`, `min`, `max`) VALUES (?, ?, ?, ?, ?, ?)";
 	const WCHAR* query = queryWstr.c_str();
-	if (!m_DbConnection->Execute(query)) {
-#if defined(MONTSERVER_ASSERT)
-		DebugBreak();
-#else
-		std::cout << "로그 행 삽입 쿼리 Execute 실패!!!" << std::endl;
-		return;
-#endif
+
+	DBConnection* dbConn;
+	bool dbProcSuccess = false;
+	while (!dbProcSuccess) {
+		// DB 커넥션 할당
+		while ((dbConn = HoldDBConnection()) == NULL);	// DBConnection 획득까지 polling
+
+		UnBind(dbConn);
+
+		BindParameter(dbConn, 1, &currentTime);
+		BindParameter(dbConn, 2, &serverNo);
+		BindParameter(dbConn, 3, &type);
+		BindParameter(dbConn, 4, &dataAvr);
+		BindParameter(dbConn, 5, &dataMin);
+		BindParameter(dbConn, 6, &dataMax);
+	
+		if (!ExecQuery(dbConn, query)) {
+			// 커넥션 반환, 연결 끊김 전달, 재연결 요청
+			FreeDBConnection(dbConn, true, true);
+		}
+		else {
+			// 업데이트 정보 insert 성공
+			dbProcSuccess = true;
+		}
+
+		FreeDBConnection(dbConn);
 	}
-#if defined(MONT_SERVER_DB_CONSOLE_LOG)
-	else {
-		std::wcout << L"[DB] Insert Query Complete: ";
-		std::wcout << L"serverNo: " << serverNo << L", type: " << type << L", Avr: " << dataAvr << ", Min: " << dataMin << L", Max: " << dataMax << std::endl;
-	}
-#endif
 }
 
 UINT __stdcall MonitoringServer::PerformanceCountFunc(void* arg)
@@ -496,7 +515,7 @@ UINT __stdcall MonitoringServer::PerformanceCountFunc(void* arg)
 
 		montserver->Send_MONT_DATA_TO_CLIENT();
 
-		Sleep(1000);
+		Sleep(MONT_TOOL_UPDATE_DELAY_MSEC);
 	}
 
 
@@ -508,7 +527,7 @@ UINT __stdcall MonitoringServer::LoggingToDbFunc(void* arg)
 	MonitoringServer* montserver = (MonitoringServer*)arg;
 
 	while (!montserver->m_ExitThread) {
-		Sleep(60000);
+		Sleep(LOG_DB_UPDATE_DELAY_MSEC);
 
 		auto now = std::chrono::system_clock::now();
 		std::time_t now_time = std::chrono::system_clock::to_time_t(now);

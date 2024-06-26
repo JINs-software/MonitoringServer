@@ -35,10 +35,8 @@ private:
 	std::mutex				m_EmptyIdxQueueMtx;
 
 	
-	HANDLE					m_MontThread;
-	
-	DBConnection*			m_DbConnection;
-	HANDLE					m_DbConnThread;
+	HANDLE					m_MontThread;		// 모니터링 툴 업데이트 스레드
+	HANDLE					m_DbConnThread;		// DB Log 업데이트 스레드
 
 	bool					m_ExitThread;
 
@@ -62,7 +60,7 @@ public:
 		),
 		m_LoginServerSession(-1), m_EchoGameServerSession(-1), m_ChatServerSession(-1),
 		m_ExitThread(false),
-		m_PerfCounter(NULL), m_DbConnection(NULL)
+		m_PerfCounter(NULL)
 	{
 		memset(m_MontClientSessions, 0, sizeof(m_MontClientSessions));
 		for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
@@ -87,10 +85,6 @@ public:
 #if defined(MONT_SERVER_MONITORING_MODE)
 		m_PerfCounter->SetProcessCounter(dfMONITOR_DATA_TYPE_MONT_SERVER_MEM, dfQUERY_PROCESS_USER_VMEMORY_USAGE, L"MonitoringServer");
 #endif
-
-		// DB 연결
-		m_DbConnection = HoldDBConnection();
-
 		// DB 스레드
 		m_DbConnThread = (HANDLE)_beginthreadex(NULL, 0, LoggingToDbFunc, this, 0, NULL);
 		if (m_DbConnThread == INVALID_HANDLE_VALUE) {
@@ -111,39 +105,8 @@ public:
 	}
 
 	virtual void OnRecv(UINT64 sessionID, JBuffer& recvBuff) override;
-	virtual void OnClientJoin(UINT64 sessionID) {
-		std::cout << "[OnClientJoin] sessionID: " << sessionID << std::endl;
-	};
-	virtual void OnClientLeave(UINT64 sessionID) {
-		std::cout << "[OnClientLeave] sessionID: " << sessionID << std::endl;
-
-		for (BYTE i = 0; i < dfMAX_NUM_OF_MONT_CLIENT_TOOL; i++) {
-			if (m_MontClientSessions[i] == sessionID) {
-				m_MontClientSessions[i] = 0;
-
-				m_EmptyIdxQueueMtx.lock();
-				m_EmptyIdxQueue.push(i);
-				m_EmptyIdxQueueMtx.unlock();
-				std::cout << "[OnClientLeave] 모니터링 클라이언트 연결 종료" << std::endl;
-
-				return;
-			}
-		}
-
-		if (m_LoginServerSession == sessionID) {
-			m_LoginServerSession = -1;
-			std::cout << "[OnClientLeave] 로그인 서버 연결 종료" << std::endl;
-		}
-		else if (m_EchoGameServerSession == sessionID) {
-			m_EchoGameServerSession = -1;
-			std::cout << "[OnClientLeave] 에코 게임 서버 연결 종료" << std::endl;
-		}
-		else if (m_ChatServerSession == sessionID) {
-			m_ChatServerSession = -1;
-			std::cout << "[OnClientLeave] 채팅 서버 연결 종료" << std::endl;
-		}
-
-	};
+	virtual void OnClientJoin(UINT64 sessionID, const SOCKADDR_IN& clientSockAddr) override;
+	virtual void OnClientLeave(UINT64 sessionID) override;
 
 	void Process_SS_MONITOR_LOGIN(SessionID sessionID, int serverNo);
 	void Process_SS_MONITOR_DATA_UPDATE(BYTE dataType, int dataVal, int timeStamp);

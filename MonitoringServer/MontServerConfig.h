@@ -2,14 +2,24 @@
 
 //#define MONTSERVER_ASSERT
 
+#define LOG_DB_UPDATE_DELAY_MSEC					60'000
+#define	MONT_TOOL_UPDATE_DELAY_MSEC					10'000
+
+#define DB_TABLE_NAME								L"monitorlog_login_"
+
 #define MONTSERVER_PROTOCOL_CODE					109
 #define MONTSERVER_PACKET_KEY						30
 
 #define MONT_DB_CONN_COUNT							1
-#define MOND_ODBC_CONNECTION_STRING					L"Driver={MySQL ODBC 8.4 ANSI Driver};Server=127.0.0.1;Database=logdb;User=mainserver;Password=607281;Option=3;"
+#define MOND_ODBC_CONNECTION_STRING					L"Driver={MySQL ODBC 8.4 ANSI Driver};Server=10.0.1.2;Database=logdb;User=mainserver;Password=607281;Option=3;"
 																						// 10.0.1.2
 #define MONT_SERVER_IP								NULL
 #define MONT_SERVER_PORT							12121
+
+#define MONT_SERVER_IOCP_CONCURRENT_THREAD			0
+#define MONT_SERVER_IOCP_WORKER_THREAD				2	
+
+#define MONT_SERVER_MAX_CONNECTIONS					10
 
 #define MONT_TLS_MEM_POOL_DEFAULT_UNIT_CNT			10
 #define MONT_TLS_MEM_POOL_DEFAULT_UNIT_CAPACITY		10
